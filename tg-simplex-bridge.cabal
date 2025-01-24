@@ -15,6 +15,7 @@ executable bridge
       Bridge
       DB.DBTypes
       DB.Puppet
+      DB.Shared
       DB.SimplexData
       DB.TelegramData
       Puppet

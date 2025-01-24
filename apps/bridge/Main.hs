@@ -17,6 +17,7 @@ import qualified Database.SQLite.Simple as DB(open, Connection)
 import qualified DB.Puppet
 import qualified DB.SimplexData
 import qualified DB.TelegramData
+import qualified DB.Shared
 
 import SimplexBot
 import TelegramBot
@@ -72,8 +73,10 @@ main = do
   DB.TelegramData.initTelegramTokenDB botDB
   DB.Puppet.initPuppetOwnerContactIdDB botDB
   DB.Puppet.initPuppetTgChatDB botDB
-  --initGroupChatDB botDB
-  --initGroupLinksDB botDB
+  DB.Shared.initGroupChatDB botDB
+  DB.Shared.initGroupLinksDB botDB
+  DB.Shared.initPendingGroupConnectionsDB botDB
+  DB.Shared.initMainBotGroupIdDB botDB
 
   opts <- welcomeGetOpts
   token <- askTelegramToken botDB

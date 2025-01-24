@@ -18,8 +18,6 @@ module DB.Puppet
 where
 
 import Puppet
-import DB.DBTypes
-
 import Simplex.Chat.Controller ( ChatController )
 import qualified Telegram.Bot.API as TelegramAPI
 import Telegram.Bot.API.Types.Common(ChatId(..))

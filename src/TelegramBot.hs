@@ -48,7 +48,7 @@ handleTgAction eventQueue action model = case action of
     where
         putEvent a = liftIO $ atomically $ writeTBQueue eventQueue (Right a)
 
-        processTelegramEvent e = model <# do (putEvent e)
+        processTelegramEvent e = model <# do putEvent e
 
         processTelegramCommand command = case command of
             MsgToChat c t -> model <# do

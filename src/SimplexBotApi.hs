@@ -10,15 +10,15 @@ module SimplexBotApi
     sendContactInvatation,
     sendMessage,
     sendComposedMessage'',
+    sendGroupMessage,
+    sendGroupMessage',
     textMsgContent,
-    textMsgContent'
-    {--
+    textMsgContent',
     createGroup,
     sendGroupInvatation,
     createGroupLink,
-    connectToGroupByLink,
-    getGroupInfo,
-    --}
+    connectToGroupByLink
+    --getGroupInfo
 )
 
 where
@@ -72,6 +72,14 @@ sendMessage cc ct = sendComposedMessage cc ct Nothing . textMsgContent
 sendMessage' :: ChatController -> ContactId -> String -> BM ()
 sendMessage' cc ctId = sendComposedMessage' cc ctId Nothing . textMsgContent
 
+sendGroupMessage :: ChatController -> GroupId -> String -> BM ()
+sendGroupMessage cc groupId msg = sendGroupMessage' cc groupId Nothing (textMsgContent msg)
+
+sendGroupMessage' :: ChatController -> GroupId -> Maybe ChatItemId -> MsgContent -> BM ()
+sendGroupMessage' cc groupId quotedItemId msgContent = do 
+  let cm = ComposedMessage {fileSource = Nothing, quotedItemId, msgContent}
+  liftIO (sendChatCmd cc (APISendMessages (ChatRef CTGroup groupId) False Nothing (cm :| []))) >>= sendMessageErrorHandler
+
 sendComposedMessage :: ChatController -> Contact -> Maybe ChatItemId -> MsgContent -> BM ()
 sendComposedMessage cc = sendComposedMessage' cc . contactId'
 
@@ -120,31 +128,28 @@ getContactList cc = do
       CRContactsList {contacts = contactList} -> return contactList
       r -> throwError $ UnexpectedChatResponse r
 
-{--
-sendGroupInvatation :: ChatController -> GroupId -> ContactId -> IO ()
-sendGroupInvatation cc groupId contactId = do
-    print contactId
-    sendChatCmd cc (APIAddMember groupId contactId GRMember) >>= \case
-        CRSentGroupInvitation {} -> return ()
-        e -> fail $ "Can't get sent invatation: " ++ show e
 
+createGroup :: ChatController -> GroupProfile -> BM GroupInfo
+createGroup cc groupProfile =
+  liftIO (sendChatCmd cc (NewGroup False groupProfile)) >>= \case
+    CRGroupCreated _ groupInfo -> return groupInfo
+    r -> throwError $ UnexpectedChatResponse r
 
-createGroupLink :: ChatController -> GroupId -> IO ConnReqContact
+createGroupLink :: ChatController -> GroupId -> BM ConnReqContact
 createGroupLink cc groupId = do
-    sendChatCmd cc (APICreateGroupLink groupId GRMember) >>= \case
+    liftIO (sendChatCmd cc (APICreateGroupLink groupId GRMember)) >>= \case
         CRGroupLinkCreated {connReqContact} -> return connReqContact
-        e -> fail $ "Can't create group link" ++ show e
-    
-connectToGroupByLink :: ChatController -> AConnectionRequestUri -> IO Int64
+        r -> throwError $ UnexpectedChatResponse r
+
+sendGroupInvatation :: ChatController -> GroupId -> ContactId -> BM ()
+sendGroupInvatation cc groupId contactId = do
+    liftIO $ print contactId
+    liftIO (sendChatCmd cc (APIAddMember groupId contactId GRMember)) >>= \case
+        CRSentGroupInvitation {} -> return ()
+        r -> throwError $ UnexpectedChatResponse r
+
+connectToGroupByLink :: ChatController -> AConnectionRequestUri -> BM Int64
 connectToGroupByLink cc link = do
-    sendChatCmd cc (Connect False (Just link)) >>= \case
-        CRSentInvitation {connection = c} -> putStrLn "Puppet connected" >> return (pccConnId c)
-        e -> fail $ "Can't connect to group by link" ++ show e
-
-getGroupInfo :: ChatController -> Int64 -> IO GroupInfo
-getGroupInfo cc gId =
-  sendChatCmd cc (APIGroupInfo gId) >>= \case
-    CRGroupInfo {groupInfo = gInfo} -> return gInfo
-    e -> fail $ "Can't get group info" ++ show e
-
---}
+    liftIO (sendChatCmd cc (Connect False (Just link))) >>= \case
+        CRSentInvitation {connection = c} -> return (pccConnId c)
+        r -> throwError $ UnexpectedChatResponse r

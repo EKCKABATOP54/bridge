@@ -3,14 +3,12 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE InstanceSigs #-}
 
 module Shared
 (
     getOrCreatePuppetByTgUser,
     getPuppetBySimplexUser,
-    --initGroupChatDB,
-    --getOrCreatePuppetSimplexGroupByTgChat,
+    getOrCreatePuppetSimplexGroupByTgChat
     --initGroupLinksDB
 ) 
 where
@@ -25,11 +23,16 @@ import Simplex.Messaging.Agent.Protocol(AConnectionRequestUri)
 import Simplex.Chat.Types -- (Profile(Profile), User, userId)
 import Database.SQLite.Simple as DB(Connection)
 import Telegram.Bot.API.Types.Common(ChatId(..))
+import qualified Telegram.Bot.API.Types.Chat as TelegramApi
 import qualified Telegram.Bot.API.Types.User as TgUser
 import DB.DBTypes
 import qualified DB.Puppet
+import qualified DB.Shared
 import qualified SimplexBotApi
 import BM
+import Data.Int (Int64)
+import qualified Simplex.Messaging.Agent.Protocol as SMP (UserId)
+import Simplex.Messaging.Encoding.String
 
 getOrCreatePuppetByTgUser :: DB.Connection -> ChatController -> TgUser.User -> AConnectionRequestUri -> BM Puppet
 getOrCreatePuppetByTgUser conn cc tguser invatationLink = do
@@ -53,106 +56,47 @@ getPuppetBySimplexUser conn cc simplexUser@Simplex.Chat.Types.User{userId=simple
     case puppet' of
         Just p -> return p
         Nothing -> fail "No simplex user for this id"
-{--
-getPuppetOwnerChat :: Puppet -> ChatController -> IO (Maybe SimplexTypes.Contact)
-getPuppetOwnerChat puppet cc = do 
-  SimplexChatBot.setCCActiveUser cc (simplexUserId puppet)
-  contacts <- SimplexChatBot.getContactList cc
-  case contacts of 
-    [] -> return Nothing
-    c:_ -> return $ Just c
---}
 
-{--
-initGroupChatDB :: DB.Connection -> IO ()
-initGroupChatDB conn = do
-    DB.execute_ conn "CREATE TABLE IF NOT EXISTS groupChats (puppetId INTEGER, tgChatId INTEGER, simplexChatId INTEGER)"
-    return ()
-  
-savePuppetGroupChat :: DB.Connection -> Puppet -> (TelegramAPI.ChatId, Int64) -> IO ()
-savePuppetGroupChat conn puppet (TelegramAPI.ChatId tgChat, sChat) = do
-    DB.executeNamed conn "INSERT INTO groupChats (puppetId, tgChatId, simplexChatId) VALUES (:puppet, :tgChat, :sChat)" [":puppet" DB.:= simplexUserId puppet, ":tgChat" DB.:= tgChat, ":sChat" DB.:= sChat]
-
-getPuppetGroupChatByTgChatId :: DB.Connection -> Puppet -> TelegramAPI.ChatId -> IO (Maybe Int64)
-getPuppetGroupChatByTgChatId conn puppet (TelegramAPI.ChatId tgChatId) = do
-    simplexChatId' <- DB.queryNamed conn "SELECT simplexChatId from groupChats WHERE puppetId = :puppet AND tgChatId = :tgChat" [":puppet" DB.:= simplexUserId puppet, ":tgChat" DB.:= (fromIntegral {--Dirty--} tgChatId :: Int64)] :: IO [RInt64]
-    case simplexChatId' of
-        [] -> return Nothing
-        (simplexChatId:_) -> return $ Just $ getInt simplexChatId
-
-getOrCreatePuppetSimplexGroupByTgChat :: Int64 -> SMP.UserId -> Puppet -> DB.Connection -> ChatController -> TelegramAPI.Chat -> IO (Maybe GroupInfo)
-getOrCreatePuppetSimplexGroupByTgChat ownerContactId botId puppet conn cc chat = do
-  sChatId' <- getPuppetGroupChatByTgChatId conn puppet (TelegramAPI.chatId chat)
+getOrCreatePuppetSimplexGroupByTgChat :: Int64 -> SMP.UserId -> Puppet -> DB.Connection -> ChatController -> TelegramApi.Chat -> BM (Maybe GroupId)
+getOrCreatePuppetSimplexGroupByTgChat ownerMainBotContactId mainBotId puppet conn cc chat = do
+  liftIO $ putStrLn $ "trying to get group chat for tg chat " ++ (show $ TelegramApi.chatId chat)
+  sChatId' <- liftIO $ DB.Shared.getPuppetGroupChatByTgChatId conn puppet (TelegramApi.chatId chat)
   case sChatId' of
-    Just sChatId -> (do
-      SimplexBotApi.setCCActiveUser cc (simplexUserId puppet) -- request group information on behalf of a puppet
-      putStrLn $ "getting guid for puppet" ++ show sChatId
-      gInfo <- SimplexBotApi.getGroupInfo cc sChatId
-      return $ Just gInfo)
+    Just sChatId -> (
+      do
+        --SimplexBotApi.setCCActiveUser cc (simplexUserId puppet)
+        liftIO $ putStrLn $ "getting guid for puppet" ++ show sChatId
+        return $ Just sChatId
+      )
     Nothing -> do
-      mlink <- getGroupLink conn (TelegramAPI.chatId chat)
+      mlink <- liftIO $ DB.Shared.getGroupLink conn (TelegramApi.chatId chat)
       case mlink of
-        Just link -> connectPuppetToGroup conn cc puppet link (TelegramAPI.chatId chat)
+        Just link -> connectPuppetToGroup conn cc puppet link (TelegramApi.chatId chat) >> return Nothing
         Nothing -> do
-          SimplexBotApi.setCCActiveUser cc botId  -- create group on behalf of main bot
-          groupInfo@SimplexChatBot.GroupInfo {groupId = gId} <- SimplexBotApi.createGroup cc (SimplexChatBot.GroupProfile {
-                displayName = fromMaybe (Text.pack $ show $ TelegramAPI.chatId chat) (TelegramAPI.chatTitle chat),
+          SimplexBotApi.setCCActiveUser cc mainBotId  -- create group on behalf of main bot
+          groupInfo@GroupInfo {groupId = gId} <- SimplexBotApi.createGroup cc (
+            GroupProfile {
+                displayName = fromMaybe (Text.pack $ show $ TelegramApi.chatId chat) (TelegramApi.chatTitle chat),
                 fullName = "",
                 description = Nothing,
                 image = Nothing,
                 groupPreferences = Nothing
                 })
-          SimplexBotApi.sendGroupInvatation cc gId ownerContactId
-          l' <- SimplexBotApi.createGroupLink cc gId
-          saveGroupLink conn l' (TelegramAPI.chatId chat)
-          ml <- getGroupLink conn (TelegramAPI.chatId chat)
-          case ml of
-            Just l -> connectPuppetToGroup conn cc puppet l (TelegramAPI.chatId chat)
-            Nothing -> putStrLn "Failed to connect to group by link" >> return Nothing
+          liftIO $ DB.Shared.insertMainBotGroupId conn (TelegramApi.chatId chat) gId
+          SimplexBotApi.sendGroupInvatation cc gId ownerMainBotContactId
+          groupInvatationLink <- SimplexBotApi.createGroupLink cc gId
+          liftIO $ DB.Shared.insertGroupLink conn groupInvatationLink (TelegramApi.chatId chat)
+          --idk how to better conver ConnReqContact to AConnectionRequestUri 
+          connectPuppetToGroup conn cc puppet (case strDecode $ Text.encodeUtf8 (Text.decodeUtf8 $ strEncode groupInvatationLink) of Right l -> l) (TelegramApi.chatId chat)
+          return Nothing
   where
-    connectPuppetToGroup conn cc p l tgChatId = do
-      SimplexBotApi.setCCActiveUser cc (simplexUserId puppet)
-      gid <- SimplexBotApi.connectToGroupByLink cc l --dirty!!!!
-      putStrLn $ "saving guid for puppet" ++ show gid
-      savePuppetGroupChat conn p (tgChatId, gid)
-      return Nothing
-        {--
-        case mlink of 
-          Just link -> return undefined --invite puppet if group exists
-            Nothing -> do
-              SimplexChatBot.setCCActiveUser cc (simplexUserId puppet) -- request group information on behalf of main bot
-              groupInfo@SimplexChatBot.GroupInfo {groupId = gId} <- SimplexChatBot.createGroup cc (SimplexChatBot.GroupProfile {
-                displayName = fromMaybe (Text.pack $ show $ TelegramAPI.chatId chat) (TelegramAPI.chatTitle chat),
-                fullName = "",
-                description = Nothing,
-                image = Nothing,
-                groupPreferences = Nothing
-                })
-              SimplexBotApi.sendGroupInvatation cc gId ownerContactId
-              l <- SimplexBotApi.createGroupLink cc gId
-            --saveGroupLink
-              return groupInfo
-              --}
-
-initGroupLinksDB :: DB.Connection -> IO ()
-initGroupLinksDB conn = do
-    DB.execute_ conn "CREATE TABLE IF NOT EXISTS groupLinks (tgChatId INTEGER, simplexChatLink STRING)"
-    return ()
-  
-saveGroupLink :: DB.Connection -> ConnReqContact -> TelegramAPI.ChatId -> IO ()
-saveGroupLink conn link (TelegramAPI.ChatId tgChat) = do
-    DB.executeNamed conn "INSERT INTO groupLinks (tgChatId, simplexChatLink) VALUES (:tgChat, :link)" [":tgChat" DB.:= tgChat, ":link" DB.:= Text.unpack (Text.decodeUtf8 $ strEncode (simplexChatContact link))]
-
-getGroupLink :: DB.Connection -> TelegramAPI.ChatId -> IO (Maybe SMP.AConnectionRequestUri) --(Maybe ConnReqContact) idk how to convert ConnectionRequestUri to AConnectionRequestUri. createGroupLink :: ChatController -> GroupId -> IO ConnReqContact but Connect IncognitoEnabled (Maybe AConnectionRequestUri)
-getGroupLink conn  (TelegramAPI.ChatId tgChatId) = do
-    simplexChatId' <- DB.query conn "SELECT simplexChatLink from groupLinks WHERE tgChatId=?" (DB.Only tgChatId) :: IO [RString]
-    case simplexChatId' of
-        [] -> return Nothing
-        (simplexChatId:_) -> case strDecode $ Text.encodeUtf8 $ Text.pack $ getString simplexChatId of
-          Left error -> return Nothing
-          Right link -> return $ Just link
-          
-          --return $ Just $ getInt simplexChatId
-
-
---}
+    connectPuppetToGroup conn cc (Puppet {simplexUserId = puppetUserId}) groupInvatationLink tgChatId = do
+      SimplexBotApi.setCCActiveUser cc puppetUserId
+      pendingConnId <- liftIO $ DB.Shared.getConnectionIdByTgChatId conn tgChatId
+      case pendingConnId of
+        Just _ -> return () -- already trying to connect to group
+        Nothing -> do
+          pendingConnId <- SimplexBotApi.connectToGroupByLink cc groupInvatationLink
+          liftIO $ putStrLn $ "saving guid for puppet" ++ show pendingConnId
+          liftIO $ DB.Shared.insertPendingGroupConnection conn puppetUserId tgChatId pendingConnId
+          return ()

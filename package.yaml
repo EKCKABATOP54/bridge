@@ -25,7 +25,7 @@ dependencies:
   
 
 executables:
-  bridge:
+  tg-simplex-bridge:
     source-dirs: 
       - apps/bridge
       - src

@@ -8,7 +8,7 @@ name:           tg-simplex-bridge
 version:        0.1.0
 build-type:     Simple
 
-executable bridge
+executable tg-simplex-bridge
   main-is: Main.hs
   other-modules:
       BM

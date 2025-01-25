@@ -12,4 +12,4 @@ import DB.DBTypes
 data Puppet = Puppet {
     tgUserId :: TelegramAPI.UserId,
     simplexUserId :: SMP.UserId
-}
+} deriving Show

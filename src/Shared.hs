@@ -59,15 +59,9 @@ getPuppetBySimplexUser conn cc simplexUser@Simplex.Chat.Types.User{userId=simple
 
 getOrCreatePuppetSimplexGroupByTgChat :: Int64 -> SMP.UserId -> Puppet -> DB.Connection -> ChatController -> TelegramApi.Chat -> BM (Maybe GroupId)
 getOrCreatePuppetSimplexGroupByTgChat ownerMainBotContactId mainBotId puppet conn cc chat = do
-  liftIO $ putStrLn $ "trying to get group chat for tg chat " ++ (show $ TelegramApi.chatId chat)
   sChatId' <- liftIO $ DB.Shared.getPuppetGroupChatByTgChatId conn puppet (TelegramApi.chatId chat)
   case sChatId' of
-    Just sChatId -> (
-      do
-        --SimplexBotApi.setCCActiveUser cc (simplexUserId puppet)
-        liftIO $ putStrLn $ "getting guid for puppet" ++ show sChatId
-        return $ Just sChatId
-      )
+    Just sChatId -> return $ Just sChatId
     Nothing -> do
       mlink <- liftIO $ DB.Shared.getGroupLink conn (TelegramApi.chatId chat)
       case mlink of
@@ -97,6 +91,5 @@ getOrCreatePuppetSimplexGroupByTgChat ownerMainBotContactId mainBotId puppet con
         Just _ -> return () -- already trying to connect to group
         Nothing -> do
           pendingConnId <- SimplexBotApi.connectToGroupByLink cc groupInvatationLink
-          liftIO $ putStrLn $ "saving guid for puppet" ++ show pendingConnId
           liftIO $ DB.Shared.insertPendingGroupConnection conn puppetUserId tgChatId pendingConnId
           return ()

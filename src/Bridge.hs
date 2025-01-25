@@ -30,6 +30,7 @@ import Simplex.Chat.Messages (AChatItem(..), ChatInfo(..), ChatItem(..), ChatTyp
 import Simplex.Chat.Messages.CIContent
 import Simplex.Messaging.Encoding.String (StrEncoding(strDecode))
 import qualified DB.Shared
+import BM
 
 data BridgeConfig = BridgeConfig{
     eventQueue :: TBQueue (Either ChatResponse TelegramEvent),
@@ -60,11 +61,8 @@ runBrige bridgeConfig@BridgeConfig{chatController = cc, telegramActionHandler = 
                 when (puppetUserId == mainBotId) $ SimplexBotApi.setCCActiveUser cc mainBotId >>  SimplexBotApi.sendMessage cc contact welcomeMessage
                 case _ownerInvatationLink of
                     Just (SMP.ACR _ cruri) -> do
-                        --print (SimplexTypes.contactLink p)
-                        --print cruri
                         when (maybe "" show (SimplexTypes.contactLink p) == show cruri) (do
                             p <- getPuppetBySimplexUser bridgedb cc botacc
-                            liftIO $ putStrLn $ "owner contact : " ++ show (SimplexTypes.contactId' contact)
                             liftIO $ DB.Puppet.insertPuppetOwnerContactId bridgedb p (SimplexTypes.contactId' contact)
                             )
                     _ -> return ()
@@ -95,7 +93,6 @@ runBrige bridgeConfig@BridgeConfig{chatController = cc, telegramActionHandler = 
                 case (chatDir, mownerContactId) of
                     (CIGroupRcv SimplexTypes.GroupMember {memberContactId=mcId@(Just contactId)}, Just ownerContactId) -> liftIO $ when (puppetUserId == mainBotId && contactId == ownerContactId) (do
                         mtgChatId <- DB.Shared.getMainBotTgChatIdBySimplexGroupId bridgedb groupId
-                        putStrLn $ "Get chat::::: " ++ (show mtgChatId)
                         case mtgChatId of
                             Just tgChatId -> tgActionHandler $ Right $ MsgToChat tgChatId (ciContentToText mc)
                             Nothing -> return ()
@@ -113,41 +110,37 @@ runBrige bridgeConfig@BridgeConfig{chatController = cc, telegramActionHandler = 
                 Nothing -> return () 
 
             ev -> return ()
-        processTelegramEvent event botId = case event of 
+        processTelegramEvent event mainBotId = case event of 
             MsgFromUser usr chat msg -> do
-                liftIO $ putStrLn "new MsgFromUser"
                 invatationLink' <- liftIO $ tryReadMVar invatationLinkMVar
                 case invatationLink' of
                     Just invatationLink -> do
                         case TelegramAPI.chatType chat of
                             TelegramAPI.ChatTypePrivate -> processTelegramPrivateMessage cc bridgedb invatationLink usr chat msg
-                            TelegramAPI.ChatTypeGroup -> processTelegramGroupMessage cc bridgedb invatationLink usr chat msg botId
-                            TelegramAPI.ChatTypeSupergroup -> processTelegramGroupMessage cc bridgedb invatationLink usr chat msg botId
-                            _ -> liftIO $ putStrLn "Unsupported chat type"
+                            TelegramAPI.ChatTypeGroup -> processTelegramGroupMessage cc bridgedb invatationLink usr chat msg mainBotId
+                            TelegramAPI.ChatTypeSupergroup -> processTelegramGroupMessage cc bridgedb invatationLink usr chat msg mainBotId
+                            ct -> throwError $ UnsupportedTelegramChatType ct
                     Nothing -> liftIO $ putStrLn "Missed invatation link. Cant process process telegram message"
-        processTelegramPrivateMessage cc bridgedb invatationLink usr chat msg = do
-            liftIO $ putStrLn $ "new private message"
-            puppet <- getOrCreatePuppetByTgUser bridgedb cc usr invatationLink
-            liftIO $ DB.Puppet.insertPuppetTgChat bridgedb puppet (TelegramAPI.chatId chat)
-            SimplexBotApi.setCCActiveUser cc (simplexUserId puppet)
-            mchatId' <- liftIO $ DB.Puppet.getPuppetOwnerContactId bridgedb puppet
-            liftIO $ putStrLn $ "Owner contact id: " ++ show mchatId'
-            case mchatId' of
-                Just chatId' -> SimplexBotApi.sendComposedMessage'' cc (ChatRef CTDirect chatId') Nothing (SimplexBotApi.textMsgContent' msg)
-                Nothing -> liftIO $ putStrLn "Cant find interlocutor's contact"
-        
-        processTelegramGroupMessage cc bridgedb invatationLink usr chat msg botId= do
-            liftIO $ putStrLn $ "New tg message from chat: " ++ (show chat)
-            puppet <- getOrCreatePuppetByTgUser bridgedb cc usr invatationLink
-            --SimplexBotApi.setCCActiveUser cc (simplexUserId puppet)
-            mownerContactId <- liftIO $ DB.Puppet.getPuppetOwnerContactId bridgedb mainBotFakePuppet
-            case mownerContactId of 
-                Just ownerContactId -> do
-                    mschatId <- getOrCreatePuppetSimplexGroupByTgChat ownerContactId botId puppet bridgedb cc chat
-                    case mschatId of
-                        Just schatId -> SimplexBotApi.setCCActiveUser cc (simplexUserId puppet) >> SimplexBotApi.sendGroupMessage cc schatId (Text.unpack msg)--SimplexBotApi.sendComposedMessage'' cc (ChatRef CTGroup gid) Nothing (SimplexBotApi.textMsgContent' msg)
-                        Nothing -> liftIO $ putStrLn "Failed to get group chat"
-                Nothing -> liftIO $ putStrLn "Cant get owner contact"
+            where
+                processTelegramPrivateMessage cc bridgedb invatationLink usr chat msg = do
+                    puppet <- getOrCreatePuppetByTgUser bridgedb cc usr invatationLink
+                    liftIO $ DB.Puppet.insertPuppetTgChat bridgedb puppet (TelegramAPI.chatId chat)
+                    SimplexBotApi.setCCActiveUser cc (simplexUserId puppet)
+                    mchatId' <- liftIO $ DB.Puppet.getPuppetOwnerContactId bridgedb puppet
+                    case mchatId' of
+                        Just chatId' -> SimplexBotApi.sendComposedMessage'' cc (ChatRef CTDirect chatId') Nothing (SimplexBotApi.textMsgContent' msg)
+                        Nothing -> throwError $ MissedPuppetOwnerContactId puppet
+                
+                processTelegramGroupMessage cc bridgedb invatationLink usr chat msg mainBotId = do
+                    puppet <- getOrCreatePuppetByTgUser bridgedb cc usr invatationLink
+                    mownerContactId <- liftIO $ DB.Puppet.getPuppetOwnerContactId bridgedb mainBotFakePuppet
+                    case mownerContactId of 
+                        Just ownerContactId -> do
+                            mschatId <- getOrCreatePuppetSimplexGroupByTgChat ownerContactId mainBotId puppet bridgedb cc chat
+                            case mschatId of
+                                Just schatId -> SimplexBotApi.setCCActiveUser cc (simplexUserId puppet) >> SimplexBotApi.sendGroupMessage cc schatId (Text.unpack msg)
+                                Nothing -> liftIO $ putStrLn "Failed to get group chat"
+                        Nothing -> liftIO $ putStrLn "Cant get owner contact"
         logEventProcessingError e = case e of
             Left e -> print e
             Right () -> return ()

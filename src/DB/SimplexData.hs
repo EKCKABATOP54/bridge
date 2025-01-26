@@ -9,11 +9,10 @@ module DB.SimplexData
 where
 
 import DB.DBTypes
-import Database.SQLite.Simple ( FromRow(..), NamedParam(..), Connection, Only(..), open, field, query, query_, executeNamed, execute_, execute)
-import Database.SQLite.Simple.FromRow (RowParser)
+import Database.SQLite.Simple (Connection, Only(..), query_, execute_, execute)
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
-import qualified Simplex.Messaging.Agent.Protocol as SMP(UserId, AConnectionRequestUri(..), UserId, AConnectionRequestUri, SConnectionMode(..))
+import qualified Simplex.Messaging.Agent.Protocol as SMP(AConnectionRequestUri(..), AConnectionRequestUri)
 import Simplex.Messaging.Encoding.String
 
 initOwnerInvatationLinkDB :: Connection -> IO ()
@@ -34,6 +33,6 @@ getOwnerInvatationLink conn = do
   links <- query_ conn "SELECT * from ownerInvatationLink":: IO [RString]
   case links of
     link':_ -> case strDecode  $ Text.encodeUtf8 $ Text.pack (getString link') of
-      Left error -> return Nothing
+      Left _ -> return Nothing
       Right link -> return $ Just link
     _ -> return Nothing

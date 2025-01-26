@@ -9,8 +9,8 @@ module DB.TelegramData
 where
 
 import DB.DBTypes
-import Database.SQLite.Simple ( FromRow(..), NamedParam(..), Connection, Only(..), open, field, query, query_, executeNamed, execute_, execute)
-import Database.SQLite.Simple.FromRow (RowParser)
+import Database.SQLite.Simple (Connection, Only(..), query_, execute_, execute)
+--import Database.SQLite.Simple.FromRow (RowParser)
 
 
 initTelegramTokenDB :: Connection -> IO ()

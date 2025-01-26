@@ -18,14 +18,13 @@ module DB.Puppet
 where
 
 import Puppet
-import Simplex.Chat.Controller ( ChatController )
 import qualified Telegram.Bot.API as TelegramAPI
 import Telegram.Bot.API.Types.Common(ChatId(..))
 import qualified Simplex.Messaging.Agent.Protocol as SMP(UserId)
-import Database.SQLite.Simple ( FromRow(..), NamedParam(..), Connection, Only(..), open, field, query, query_, executeNamed, execute_)
+import Database.SQLite.Simple ( FromRow(..), NamedParam(..), Connection, Only(..), field, query, query_, executeNamed, execute_)
 import Database.SQLite.Simple.FromRow (RowParser)
 import Data.Int (Int64)
-import DB.DBTypes
+import DB.DBTypes(RSimplexUserID(..), RInt64(..))
 
 instance FromRow Puppet where
     fromRow = (\ _ _ sid tguid-> Puppet {tgUserId = TelegramAPI.UserId tguid, simplexUserId = sid}) <$> (field::RowParser Integer) <*> (field::RowParser Integer) <*> field <*> field

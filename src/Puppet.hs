@@ -7,7 +7,7 @@ where
 
 import qualified Telegram.Bot.API as TelegramAPI(UserId)
 import qualified Simplex.Messaging.Agent.Protocol as SMP(UserId)
-import DB.DBTypes
+import DB.DBTypes()
 
 data Puppet = Puppet {
     tgUserId :: TelegramAPI.UserId,

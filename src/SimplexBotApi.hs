@@ -60,7 +60,6 @@ initializeBotAddress' logAddress cc = do
       when logAddress $ putStrLn $ "Bot's contact address is: " <> B.unpack (strEncode uri)
       void $ sendChatCmd cc $ AddressAutoAccept $ Just AutoAccept {acceptIncognito = False, autoReply = Nothing}
 
-
 sendMessageErrorHandler :: ChatResponse -> BM ()
 sendMessageErrorHandler r = case r of
   CRNewChatItems {} -> return ()
@@ -127,7 +126,6 @@ getContactList cc = do
     liftIO (sendChatCmd cc ListContacts) >>= \case
       CRContactsList {contacts = contactList} -> return contactList
       r -> throwError $ UnexpectedChatResponse r
-
 
 createGroup :: ChatController -> GroupProfile -> BM GroupInfo
 createGroup cc groupProfile =

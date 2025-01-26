@@ -28,11 +28,10 @@ import DB.DBTypes
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
 import Simplex.Chat.Types(ConnReqContact)
-import Simplex.Chat.Controller ( ChatController )
 import qualified Telegram.Bot.API as TelegramAPI
 import Telegram.Bot.API.Types.Common(ChatId(..))
 import qualified Simplex.Messaging.Agent.Protocol as SMP(UserId, AConnectionRequestUri)
-import Database.SQLite.Simple ( FromRow(..), NamedParam(..), Connection, Only(..), open, field, query, query_, executeNamed, execute_, queryNamed)
+import Database.SQLite.Simple ( FromRow(..), NamedParam(..), Connection, Only(..), query_, executeNamed, execute_, queryNamed, query)
 import Database.SQLite.Simple.FromRow (RowParser)
 import Data.Int (Int64)
 import Simplex.Messaging.Encoding.String
@@ -78,7 +77,7 @@ getGroupLink conn  (TelegramAPI.ChatId tgChatId) = do
     case simplexChatId' of
         [] -> return Nothing
         (simplexChatId:_) -> case strDecode $ Text.encodeUtf8 $ Text.pack $ getString simplexChatId of
-          Left error -> return Nothing
+          Left _ -> return Nothing
           Right link -> return $ Just link
 
 initPendingGroupConnectionsDB :: Connection -> IO ()

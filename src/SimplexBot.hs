@@ -11,7 +11,6 @@ module SimplexBot
 )
 where
 
-
 import Control.Logger.Simple
 import Control.Monad
 import Control.Monad.Reader
@@ -119,8 +118,6 @@ getWithPrompt s = putStr (s <> ": ") >> hFlush stdout >> getLine
 userStr :: User -> String
 userStr User {localDisplayName, profile = LocalProfile {fullName}} =
   Text.unpack $ localDisplayName <> if Text.null fullName || localDisplayName == fullName then "" else " (" <> fullName <> ")"
-
-
 
 mySimplexBot :: MVar UserId -> DB.Connection -> TBQueue (Either ChatResponse TelegramEvent) -> User -> ChatController -> IO ()
 mySimplexBot puppeterIdMVar conn eventQueue _user@User{userId = _userId} cc = do

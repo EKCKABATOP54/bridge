@@ -2,7 +2,7 @@
 
 module TelegramBot
 (
-    Model(..),
+    Model,
     TelegramEvent(..),
     TelegramCommand(..),
     TelegramAction,
@@ -15,14 +15,10 @@ where
 import qualified Data.Text as Text
 import Telegram.Bot.API
 import Telegram.Bot.Simple
-import Telegram.Bot.Simple.UpdateParser (updateMessageText, updateMessageSticker)
-import Telegram.Bot.API.InlineMode.InputMessageContent (defaultInputTextMessageContent)
-import qualified Data.Text.Internal.Read as Text
 import Control.Monad.Reader
 import Control.Concurrent.STM
 import Simplex.Chat.Controller(ChatResponse)
-import Telegram.Bot.API.Types.Common(ChatId(..), SomeChatId(..))
-import Telegram.Bot.API.Types.User
+import Telegram.Bot.API.Types.Common()
 
 type Model = ()
 

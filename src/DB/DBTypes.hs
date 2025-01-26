@@ -8,12 +8,10 @@ module DB.DBTypes
 
 where
 
-import Database.SQLite.Simple as DB(FromRow(..), NamedParam(..), Connection, Only(..), open, field, query, query_, executeNamed, execute, execute_)
-import Database.SQLite.Simple.FromRow as DB(RowParser)
+import Database.SQLite.Simple as DB(FromRow(..), field)
 import Data.Int (Int64)
 import qualified Simplex.Messaging.Agent.Protocol as SMP(UserId)
 import qualified Telegram.Bot.API as TelegramAPI
-import qualified Telegram.Bot.Simple as TelegramAPI
 
 
 newtype RSimplexUserID = RSimplexUserID {getUID :: SMP.UserId}

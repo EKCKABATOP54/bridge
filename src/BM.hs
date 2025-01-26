@@ -6,7 +6,7 @@ module BM
 where
 
 import Control.Monad.Except
-import Control.Monad
+import Control.Monad()
 import Simplex.Chat.Controller(ChatResponse)
 
 import Puppet

@@ -13,7 +13,7 @@ module DB.Shared
 
     initPendingGroupConnectionsDB,
     insertPendingGroupConnection,
-    getConnectionIdByTgChatId,
+    getPuppetConnectionIdByTgChatId,
     getPuppetTgChatIdByConnectionId,
 
     initMainBotGroupIdDB,
@@ -98,14 +98,10 @@ getPuppetTgChatIdByConnectionId conn simplexConnectionId = do
     case (puppetId', tgChatId') of
         (puppetId : _ , tgChatId: _) -> return $ Just $ (getUID puppetId, TelegramAPI.ChatId $ toInteger $ getInt tgChatId)
         _ -> return Nothing
-    {--
-    case ptId of
-        [] -> return Nothing
-        ((puppetId, tgChatId):_) -> return $ Just $ (getUID puppetId, TelegramAPI.ChatId $ toInteger $ getInt tgChatId)
---}
-getConnectionIdByTgChatId :: Connection -> TelegramAPI.ChatId -> IO (Maybe Int64)
-getConnectionIdByTgChatId conn (TelegramAPI.ChatId tgChatId) = do
-    tgChatId' <- queryNamed conn "SELECT simplexConnectionId from pendingGroupConnections WHERE tgChatId = :tgChatId" [":tgChatId" := tgChatId] :: IO [RInt64]
+
+getPuppetConnectionIdByTgChatId :: Connection -> Int64 -> TelegramAPI.ChatId -> IO (Maybe Int64)
+getPuppetConnectionIdByTgChatId conn puppetId (TelegramAPI.ChatId tgChatId) = do
+    tgChatId' <- queryNamed conn "SELECT simplexConnectionId from pendingGroupConnections WHERE tgChatId = :tgChatId AND puppetId = :puppetId" [":tgChatId" := tgChatId, ":puppetId" := puppetId] :: IO [RInt64]
     case tgChatId' of
         [] -> return Nothing
         (tgChatId:_) -> return $ Just $ getInt tgChatId

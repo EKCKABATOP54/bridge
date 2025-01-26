@@ -86,7 +86,7 @@ getOrCreatePuppetSimplexGroupByTgChat ownerMainBotContactId mainBotId puppet con
   where
     connectPuppetToGroup conn cc (Puppet {simplexUserId = puppetUserId}) groupInvatationLink tgChatId = do
       SimplexBotApi.setCCActiveUser cc puppetUserId
-      pendingConnId <- liftIO $ DB.Shared.getConnectionIdByTgChatId conn tgChatId
+      pendingConnId <- liftIO $ DB.Shared.getPuppetConnectionIdByTgChatId conn puppetUserId tgChatId
       case pendingConnId of
         Just _ -> return () -- already trying to connect to group
         Nothing -> do
